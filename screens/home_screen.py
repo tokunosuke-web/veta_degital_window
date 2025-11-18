@@ -44,8 +44,8 @@ class HomeScreen:
         settings_manager.save_settings(mode=selected_mode)
         
         self.root.destroy()
-        if selected_mode == "Image":
-            image_mode_setting_screen.create_screen()
+        #if selected_mode == "Image":
+            #image_mode_setting_screen.create_screen()
         if selected_mode == "Video":
             video_mode_setting_screen.create_screen()
         elif selected_mode == "Study":
