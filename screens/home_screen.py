@@ -45,7 +45,7 @@ class HomeScreen:
         
         self.root.destroy()
         if selected_mode == "Image":
-            #image_mode_setting_screen.create_screen()
+            image_mode_setting_screen.create_screen()
         if selected_mode == "Video":
             video_mode_setting_screen.create_screen()
         elif selected_mode == "Study":
