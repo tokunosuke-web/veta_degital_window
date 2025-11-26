@@ -396,7 +396,7 @@ class VideoModeScreenPygame:
                 + self.weather_data["weather_data"][3]['weather_icon'] + "     "
                 + self.weather_data["weather_data"][4]['weather_icon'] + "     "
                 + self.weather_data["weather_data"][5]['weather_icon'] + "     "
-                + self.weather_data["weather_data"][6]['weather_icon"]
+                + self.weather_data["weather_data"][6]['weather_icon']
             )
 
             if not hasattr(self, 'weather_font'):
