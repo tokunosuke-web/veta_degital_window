@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import messagebox
 from PIL import Image, ImageTk
-import cv2
+import imageio.v2 as iio  # ★ 追加：動画読み込み用
 import os
 import random
 import time
@@ -12,7 +12,8 @@ import screens.video_mode_setting_screen as video_mode_setting_screen
 class SimpleVideoWeatherScreen:
     def __init__(self):
         self.video_path = "./videos"  # 動画フォルダ
-        self.video_files = [f for f in os.listdir(self.video_path) if f.endswith(('.mp4', '.avi', '.mov', '.mkv'))]
+        self.video_files = [f for f in os.listdir(self.video_path)
+                            if f.endswith(('.mp4', '.avi', '.mov', '.mkv'))]
         self.weather_data = None
         self.last_weather_update = 0
 
@@ -39,12 +40,14 @@ class SimpleVideoWeatherScreen:
 
         self.root.bind('<Escape>', lambda e: self.close_window())
 
+        # 動画と表示更新を開始
         self.play_random_video()
         self.update_weather()
         self.update_display()
         self.root.mainloop()
 
     def play_random_video(self):
+        """ランダムな動画ファイルを選んで reader を準備"""
         if not self.video_files:
             messagebox.showerror("Error", "動画ファイルが見つかりません")
             self.root.destroy()
@@ -52,35 +55,61 @@ class SimpleVideoWeatherScreen:
 
         random_file = random.choice(self.video_files)
         path = os.path.join(self.video_path, random_file)
-        self.cap = cv2.VideoCapture(path)
-        if not self.cap.isOpened():
-            messagebox.showerror("Error", f"動画を開けません: {path}")
+
+        try:
+            # imageio の VideoReader を作成
+            self.video_reader = iio.get_reader(path)
+        except Exception as e:
+            messagebox.showerror("Error", f"動画を開けません: {path}\n{e}")
             self.root.destroy()
             return
 
-        fps = self.cap.get(cv2.CAP_PROP_FPS)
-        self.frame_interval = 1.0 / fps if fps > 0 else 1.0 / 30
+        # メタデータから fps を取得（無ければ 30fps）
+        meta = self.video_reader.get_meta_data()
+        fps = meta.get('fps', 30) or 30
+        self.frame_interval = 1.0 / fps
+
+        # フレームイテレータを準備
+        self.frame_iterator = iter(self.video_reader)
 
     def update_display(self):
-        ret, frame = self.cap.read()
-        if not ret:
-            self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-            ret, frame = self.cap.read()
+        """フレーム更新＋時刻・天気更新"""
+        frame = None
+        try:
+            # 次のフレームを取得
+            frame = next(self.frame_iterator)
+        except StopIteration:
+            # 動画が終わったら最初から再生
+            try:
+                self.frame_iterator = iter(self.video_reader)
+                frame = next(self.frame_iterator)
+            except Exception:
+                frame = None
 
-        if ret:
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            pil_image = Image.fromarray(frame_rgb)
-            screen_w, screen_h = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
-            frame_resized = pil_image.resize((screen_w, screen_h))
-            photo = ImageTk.PhotoImage(frame_resized)
+        if frame is not None:
+            # frame: (H, W, 3) ndarray, RGB 想定
+            pil_image = Image.fromarray(frame)
+
+            # 画面サイズにリサイズ
+            screen_w = self.root.winfo_screenwidth()
+            screen_h = self.root.winfo_screenheight()
+            pil_image = pil_image.resize((screen_w, screen_h))
+
+            photo = ImageTk.PhotoImage(pil_image)
             self.video_label.configure(image=photo)
             self.video_label.image = photo
             self.overlay.lift()
 
+        # 時刻・日付更新
         self.update_time_labels()
-        if time.time() - self.last_weather_update > 3600:  # 1時間ごとに更新
+
+        # 天気は1時間ごとに更新
+        if time.time() - self.last_weather_update > 3600:
             self.update_weather()
-        self.root.after(int(self.frame_interval * 1000), self.update_display)
+
+        # 次フレームのスケジュール
+        delay_ms = int(self.frame_interval * 1000)
+        self.root.after(delay_ms, self.update_display)
 
     def update_time_labels(self):
         now = datetime.now()
@@ -101,8 +130,11 @@ class SimpleVideoWeatherScreen:
         self.last_weather_update = time.time()
 
     def close_window(self):
-        if hasattr(self, 'cap'):
-            self.cap.release()
+        try:
+            if hasattr(self, 'video_reader'):
+                self.video_reader.close()
+        except Exception:
+            pass
         self.root.destroy()
         video_mode_setting_screen.create_screen()
 
