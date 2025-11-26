@@ -13,27 +13,21 @@ from PIL import Image, ImageEnhance, ImageTk
 import utils.fetch_train_schedule as fetch_train_schedule
 import json
 import pygame
-import cv2
+import imageio.v2 as iio  # ★ cv2 の代わり
 import numpy as np
 
 # start: カスタム設定
-# 日付UIとディスプレイ距離
 MARGIN_ABOVE_CLOCK = 50
-# 文字の大きさ
 DATE_FONT_SIZE = 28
 TIME_FONT_SIZE = 70
 WEATHER_FONT_SIZE = 20
-# 画像の表示領域に対して何割表示するか 0~1.0
 CONSTANT_MARGIN = 0.7
-# 明るくなる時間
 TIME_BRIGHTNESS_HOUR = 7
 TIME_BRIGHTNESS_MINUTE = 0
-# 暗くなる時間
 TIME_DARKNESS_HOUR = 21
 TIME_DARKNESS_MINUTE = 0
-# 音楽が止まるまでの時間（分）
 MUSIC_STOP_MINUTES = 10
-# 列車時刻表ファイルパス
+
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 BASE_DIR = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
 TRAIN_SCHEDULE_FILE_PATH_A = os.path.join(BASE_DIR, "data", "train_schedule_for_nagoya.json")
@@ -80,7 +74,10 @@ class VideoModeScreenPygame:
         self.preserve_quality = settings.get('preserve_quality', True)
         self.play_video_audio = settings.get('play_video_audio', False)
 
-        self.video_files = [f for f in os.listdir(self.video_path) if f.endswith(('.mp4', '.avi', '.mov', '.MOV', '.mkv'))]
+        self.video_files = [
+            f for f in os.listdir(self.video_path)
+            if f.endswith(('.mp4', '.avi', '.mov', '.MOV', '.mkv'))
+        ]
 
     # UI作成
     def create_widgets(self):
@@ -107,34 +104,30 @@ class VideoModeScreenPygame:
         pygame.init()
         pygame.display.set_caption("Video Display App (Pygame)")
         
-        # 動画の読み込み
-        self.cap = cv2.VideoCapture(random_video_path)
-        if not self.cap.isOpened():
-            print(f"動画ファイルを開けません: {random_video_path}")
+        # ★ imageio で動画 reader を開く
+        try:
+            self.video_reader = iio.get_reader(random_video_path)
+        except Exception as e:
+            print(f"動画ファイルを開けません: {random_video_path} / {e}")
             return
-        
-        # 動画の最適化設定
-        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # バッファサイズを最小に
-        
-        # 動画の向き情報を取得（キャッシュ）
-        self.video_orientation = self.cap.get(cv2.CAP_PROP_ORIENTATION_META)
-        
-        # 動画の寸法を取得
-        self.video_width = self.cap.get(cv2.CAP_PROP_FRAME_WIDTH)
-        self.video_height = self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
-        
+
+        # メタデータ取得
+        meta = self.video_reader.get_meta_data()
+        fps = meta.get("fps", 30) or 30
+        size = meta.get("size", None)
+        if size:
+            self.video_width, self.video_height = size  # (w, h)
+        else:
+            self.video_width, self.video_height = 0, 0
+
+        # OpenCV の ORIENTATION_META は使えないので 0 にしておく
+        self.video_orientation = 0
+
         # 回転が必要かどうかを事前に判断
         self.rotation_needed = self.determine_rotation_needed()
-        
-        # 左右反転が必要かどうかを判断
+        # 左右反転が必要かどうかを判断（今はほぼ使っていない）
         self.flip_needed = self.determine_flip_needed()
         
-        # FPS設定
-        fps = self.cap.get(cv2.CAP_PROP_FPS)
-        if fps <= 0:
-            fps = 30.0
-        
-        print(f"動画の向き情報: {self.video_orientation}")
         print(f"動画の寸法: {self.video_width} x {self.video_height}")
         print(f"動画のFPS: {fps}")
         print(f"回転が必要: {self.rotation_needed}")
@@ -147,8 +140,14 @@ class VideoModeScreenPygame:
         clock = pygame.time.Clock()
         
         # display大きさに調整        
-        self.screen = pygame.display.set_mode((pygame.display.Info().current_w, pygame.display.Info().current_h))
+        self.screen = pygame.display.set_mode(
+            (pygame.display.Info().current_w, pygame.display.Info().current_h),
+            pygame.FULLSCREEN
+        )
         
+        # フレームイテレータ
+        self.frame_iterator = iter(self.video_reader)
+
         # loopフラグ
         self.running = True
         last_frame_time = time()
@@ -162,19 +161,19 @@ class VideoModeScreenPygame:
                 if event.type == pygame.QUIT:
                     self.close_window()
                 elif event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_ESCAPE or event.key == pygame.K_q:  # ESC or Qキーが押された場合
+                    if event.key == pygame.K_ESCAPE or event.key == pygame.K_q:  # ESC or Qキー
                         self.close_window()
-                    elif event.key == pygame.K_f:  # Fキーが押された場合
+                    elif event.key == pygame.K_f:
                         self.toggle_fullscreen()
-                    elif event.key == pygame.K_h:  # Hキーが押された場合
+                    elif event.key == pygame.K_h:
                         self.toggle_cursor()
-                    elif event.key == pygame.K_v:  # Vキーが押された場合
+                    elif event.key == pygame.K_v:
                         self.set_volume()
-                    elif event.key == pygame.K_m:  # Mキーが押された場合
+                    elif event.key == pygame.K_m:
                         self.sound_mute()
-                    elif event.key == pygame.K_i:  # Iキーが押された場合
+                    elif event.key == pygame.K_i:
                         self.image_brightness_adjustment()
-                    elif event.key == pygame.K_SPACE:  # SPACEキーが押された場合
+                    elif event.key == pygame.K_SPACE:
                         self.next_video()
 
             # フレーム更新のタイミング制御
@@ -208,34 +207,44 @@ class VideoModeScreenPygame:
                 self.last_train_update = current_time
             
             # FPS制限（動画のFPSに合わせる）
-            clock.tick(int(fps))  # 動画の元のFPSに合わせる
-            
-    def update_video_without_margin_frame(self):
-        # 動画フレームの取得
-        ret, frame = self.cap.read()
-        if not ret:
-            self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)  # ループ再生
-            ret, frame = self.cap.read()
+            clock.tick(int(fps))
 
-        # フレームの左右反転を適用（必要な場合のみ）
-        # 現在は無効化（問題がある場合は有効化）
+    def update_video_without_margin_frame(self):
+        # 動画フレームの取得（imageio イテレータから）
+        try:
+            frame = next(self.frame_iterator)
+        except StopIteration:
+            # ループ再生：reader を閉じて再度開き直す
+            try:
+                self.video_reader.close()
+            except Exception:
+                pass
+            self.video_reader = iio.get_reader(self.current_video_path)
+            self.frame_iterator = iter(self.video_reader)
+            try:
+                frame = next(self.frame_iterator)
+            except StopIteration:
+                return  # それでもだめなら諦める
+
+        # frame: (H, W, 3) / RGB
+
+        # フレームの左右反転を適用（必要な場合）
         # if getattr(self, 'flip_needed', False):
-        #     frame = cv2.flip(frame, 1)  # 1は水平反転（左右反転）
+        #     frame = np.flip(frame, axis=1)
 
         # フレームの回転補正（縦動画の場合）
         frame = self.correct_rotation(frame)
 
-        # OpenCVからPygameサーフェスへ変換
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # BGRからRGBへ変換
+        # numpy 配列 → Pygame サーフェスへ変換
         frame_surface = pygame.surfarray.make_surface(frame)
 
         # フレームの大きさに合わせて拡大（キャッシュを活用）
         if not hasattr(self, 'scale_ratio') or not hasattr(self, 'screen_size'):
-            self.scale_ratio = max(
-                self.screen.get_width() / frame_surface.get_width(),
-                self.screen.get_height() / frame_surface.get_height()
-            )
             self.screen_size = (self.screen.get_width(), self.screen.get_height())
+            self.scale_ratio = max(
+                self.screen_size[0] / frame_surface.get_width(),
+                self.screen_size[1] / frame_surface.get_height()
+            )
         
         new_width = int(frame_surface.get_width() * self.scale_ratio)
         new_height = int(frame_surface.get_height() * self.scale_ratio)
@@ -274,59 +283,46 @@ class VideoModeScreenPygame:
         video_width = getattr(self, 'video_width', 0)
         video_height = getattr(self, 'video_height', 0)
         
-        # 動画の向き情報が有効な場合
         if orientation in [90, 180, 270]:
             return orientation
-        # 向き情報がない場合は寸法で判断
         elif video_width > 0 and video_height > 0:
-            # 縦長動画（スマホで撮影された動画）の場合
-            if video_height > video_width and video_height / video_width > 1.3:
+            # 縦長動画（かなり縦長なら）
+            if video_height > video_width and video_height / max(video_width, 1) > 1.3:
                 return 90
         return 0  # 回転不要
 
     def determine_flip_needed(self):
-        """左右反転が必要かどうかを判断する"""
-        # 基本的には反転しない（保守的なアプローチ）
+        """左右反転が必要かどうかを判断する（今は基本 False）"""
         orientation = getattr(self, 'video_orientation', 0)
-        
-        # 向き情報がある場合は反転しない
         if orientation in [90, 180, 270]:
             return False
         
-        # 動画ファイル名から判断（明らかにカメラ動画の場合のみ）
         current_video_path = getattr(self, 'current_video_path', '')
         if current_video_path:
             filename = os.path.basename(current_video_path).lower()
-            # より具体的なカメラ関連のキーワード
             camera_keywords = ['selfie', 'front_camera', 'back_camera', 'mirror']
             if any(keyword in filename for keyword in camera_keywords):
                 print(f"カメラ動画と判断: {filename}")
                 return True
         
-        # デフォルトは反転しない
         print(f"左右反転なし: {current_video_path}")
         return False
 
     def correct_rotation(self, frame):
-        # 事前に判断された回転情報を使用
         rotation = getattr(self, 'rotation_needed', 0)
-        
         if rotation == 90:
             frame = np.rot90(frame, k=1)
         elif rotation == 180:
             frame = np.rot90(frame, k=2)
         elif rotation == 270:
             frame = np.rot90(frame, k=3)
-        
         return frame
 
     # 時計のUI作成
     def show_clock_without_margin_widget(self):
-        # 現在の時間と日付を取得
         current_date = strftime('%Y-%m-%d %A', localtime())
         current_time = strftime('%H:%M:%S')
 
-        # フォントをキャッシュ（初回のみ作成）
         if not hasattr(self, 'date_font'):
             self.date_font = pygame.font.SysFont('calibri', DATE_FONT_SIZE, bold=True)
             self.time_font = pygame.font.SysFont('calibri', TIME_FONT_SIZE, bold=True)
@@ -334,7 +330,6 @@ class VideoModeScreenPygame:
         current_date_surface = self.date_font.render(current_date, True, (255, 255, 255))
         current_time_surface = self.time_font.render(current_time, True, (255, 255, 255))
         
-        # 位置を調整（image_modeと同じ位置）
         self.screen.blit(current_date_surface, (self.screen_size[0] // 3.5, self.screen_size[1] - 300))
         self.screen.blit(current_time_surface, (self.screen_size[0] // 3.5, self.screen_size[1] - 150))
 
@@ -369,10 +364,9 @@ class VideoModeScreenPygame:
         
         lines = text.split('\n')
         for i, line in enumerate(lines):
-            if line.strip():  # 空行でない場合のみ描画
+            if line.strip():
                 text_surface = font.render(line, True, color)
                 if center_align:
-                    # 中央揃えの場合、テキストの幅を考慮して位置を調整
                     text_width = text_surface.get_width()
                     text_x = x - text_width // 2
                 else:
@@ -381,40 +375,51 @@ class VideoModeScreenPygame:
 
     # 天気のUI作成
     def show_weather_without_margin_widget(self):
-        # キャッシュされた天気データを使用
-        if self.weather_data != None:
-            forecast_text = (self.weather_data["weather_data"][0]['weather_icon'] + "　" + "↑" + self.weather_data["weather_data"][0]['high_temp'] + "°" + "↓" + self.weather_data["weather_data"][0]['low_temp'] + "°" + "\n" 
-                + "00~06" + ":" + self.weather_data["today_probabilities"][0] + "%" + "　" + "06~12" + ":" + self.weather_data["today_probabilities"][1] + "%" + "\n"
-                + "12~18" + ":" + self.weather_data["today_probabilities"][2] + "%" + "　" + "18~24" + ":" + self.weather_data["today_probabilities"][3] + "%" + "\n"
+        if self.weather_data is not None:
+            forecast_text = (
+                self.weather_data["weather_data"][0]['weather_icon']
+                + "　" + "↑" + self.weather_data["weather_data"][0]['high_temp'] + "°"
+                + "↓" + self.weather_data["weather_data"][0]['low_temp'] + "°" + "\n"
+                + "00~06" + ":" + self.weather_data["today_probabilities"][0] + "%" + "　"
+                + "06~12" + ":" + self.weather_data["today_probabilities"][1] + "%" + "\n"
+                + "12~18" + ":" + self.weather_data["today_probabilities"][2] + "%" + "　"
+                + "18~24" + ":" + self.weather_data["today_probabilities"][3] + "%" + "\n"
                 + "\n"
-                + self.weather_data["weather_data"][1]['weekday'] + " " + self.weather_data["weather_data"][2]['weekday'] + " " + self.weather_data["weather_data"][3]['weekday'] + " " + self.weather_data["weather_data"][4]['weekday'] + " " + self.weather_data["weather_data"][5]['weekday'] + " " + self.weather_data["weather_data"][6]['weekday'] + "\n"
-                + self.weather_data["weather_data"][1]['weather_icon'] + "     " + self.weather_data["weather_data"][2]['weather_icon'] + "     " + self.weather_data["weather_data"][3]['weather_icon'] + "     " + self.weather_data["weather_data"][4]['weather_icon'] + "     " + self.weather_data["weather_data"][5]['weather_icon'] + "     " + self.weather_data["weather_data"][6]['weather_icon'])
+                + self.weather_data["weather_data"][1]['weekday'] + " "
+                + self.weather_data["weather_data"][2]['weekday'] + " "
+                + self.weather_data["weather_data"][3]['weekday'] + " "
+                + self.weather_data["weather_data"][4]['weekday'] + " "
+                + self.weather_data["weather_data"][5]['weekday'] + " "
+                + self.weather_data["weather_data"][6]['weekday'] + "\n"
+                + self.weather_data["weather_data"][1]['weather_icon'] + "     "
+                + self.weather_data["weather_data"][2]['weather_icon'] + "     "
+                + self.weather_data["weather_data"][3]['weather_icon'] + "     "
+                + self.weather_data["weather_data"][4]['weather_icon"] + "     "
+                + self.weather_data["weather_data"][5]['weather_icon'] + "     "
+                + self.weather_data["weather_data"][6]['weather_icon"]
+            )
 
-            # pygameでテキストを表示（太字で統一）
             if not hasattr(self, 'weather_font'):
                 self.weather_font = pygame.font.SysFont('calibri', WEATHER_FONT_SIZE, bold=True)
             
-            # 改行付きテキストを描画（中央揃え）
             text_x = self.screen_size[0] // 1.33
             text_y = self.screen_size[1] - 200
             self.render_multiline_text(forecast_text, self.weather_font, (255, 255, 255), text_x, text_y, center_align=True)
 
     # 列車時刻表の表示
     def show_train_schedule_without_margin_widget(self):
-        # キャッシュされた列車時刻表データを使用
         try:
             if self.train_data and self.train_data['A'] is not None and self.train_data['B'] is not None:
                 train_schedule_text = (
                     DESTINATION_A + "　" + DESTINATION_B + "\n"
                     + self.train_data['A'][0]['time'] + "　　　" + self.train_data['B'][0]['time'] + "\n"
                     + self.train_data['A'][1]['time'] + "　　　" + self.train_data['B'][1]['time'] + "\n"
-                    + self.train_data['A'][2]['time'] + "　　　" + self.train_data['B'][2]['time'] + "\n")
+                    + self.train_data['A'][2]['time'] + "　　　" + self.train_data['B'][2]['time'] + "\n"
+                )
                 
-                # pygameでテキストを表示（太字で統一）
                 if not hasattr(self, 'train_font'):
                     self.train_font = pygame.font.SysFont('calibri', WEATHER_FONT_SIZE, bold=True)
                 
-                # 改行付きテキストを描画（中央揃え）
                 text_x = self.screen_size[0] // 1.33
                 text_y = self.screen_size[1] - 400
                 self.render_multiline_text(train_schedule_text, self.train_font, (255, 255, 255), text_x, text_y, center_align=True)
@@ -435,7 +440,11 @@ class VideoModeScreenPygame:
             self.player.stop_music()
         # 動画停止
         self.running = False
-        self.cap.release()
+        try:
+            if hasattr(self, "video_reader"):
+                self.video_reader.close()
+        except Exception:
+            pass
         pygame.quit()
         video_mode_setting_screen.create_screen()
 
@@ -445,17 +454,16 @@ class VideoModeScreenPygame:
             self.image_brightness = 1
 
     def toggle_fullscreen(self):
-        # 現在のモードを取得し、全画面かどうかを切り替える
         current_mode = pygame.display.get_surface()
         is_fullscreen = current_mode.get_flags() & pygame.FULLSCREEN
 
-        pygame.display.set_mode(
-            (0, 0), 
-            0 if is_fullscreen else pygame.FULLSCREEN
-        )
+        if is_fullscreen:
+            self.screen = pygame.display.set_mode(self.screen_size, 0)
+        else:
+            self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+            self.screen_size = (self.screen.get_width(), self.screen.get_height())
 
     def toggle_cursor(self):
-        # 現在のカーソル表示状態を取得して反転
         pygame.mouse.set_visible(not pygame.mouse.get_visible())
 
     def set_volume(self):
@@ -474,44 +482,38 @@ class VideoModeScreenPygame:
 
     def next_video(self):
         self.running = False
+        try:
+            if hasattr(self, "video_reader"):
+                self.video_reader.close()
+        except Exception:
+            pass
         self.update_video_without_margin_widget()
 
     def automatic_brightness_adjustment(self):
         now = datetime.now().time()
         
         if now >= datetime.strptime("09:00", "%H:%M").time() and now < datetime.strptime("17:00", "%H:%M").time():
-            # 昼の時間帯は明るさを1.0に設定
             self.image_brightness = 1.0
             print("今は昼間（09:00〜17:00）です。")
         
         elif now >= datetime.strptime("21:00", "%H:%M").time() or now < datetime.strptime("05:00", "%H:%M").time():
-            # 夜の時間帯は明るさを0.2に設定
             self.image_brightness = 0.2
             print("今は夜間（21:00〜05:00）です。")
         
         else:
-            # 変化する時間帯（05:00 - 09:00、17:00 - 21:00）は徐々に変化させる
             if now >= datetime.strptime("05:00", "%H:%M").time() and now < datetime.strptime("09:00", "%H:%M").time():
-                # 朝、夜から昼にかけて徐々に明るくする
                 hours_since_6am = (datetime.combine(datetime.today(), now) - datetime.strptime("05:00", "%H:%M")).seconds / 3600
                 self.image_brightness = 0.2 + (0.8 * (hours_since_6am / 4))
-                print(f"今は朝（05:00〜09:00）です。徐々に明るくしています。")
+                print("今は朝（05:00〜09:00）です。徐々に明るくしています。")
 
             elif now >= datetime.strptime("17:00", "%H:%M").time() and now < datetime.strptime("21:00", "%H:%M").time():
-                # 夕方、昼から夜にかけて徐々に暗くする
                 hours_since_5pm = (datetime.combine(datetime.today(), now) - datetime.strptime("17:00", "%H:%M")).seconds / 3600
                 self.image_brightness = 1.0 - (0.8 * (hours_since_5pm / 4))
-                print(f"今は夕方（17:00〜21:00）です。徐々に暗くしています。")
+                print("今は夕方（17:00〜21:00）です。徐々に暗くしています。")
 
-    # 特定の時間までの残り時間を計算
     def calculate_time_next_trigger(self, target_hour, target_minute):
-        # 現在の時刻を取得
         current_time = datetime.now()
-
-        # 次に発動させたい時間を計算
         target_time = current_time.replace(hour=target_hour, minute=target_minute, second=0, microsecond=0)
-
-        # 現在の時刻から次の発動までの時間を計算
         delta_time = target_time - current_time
         total_seconds = delta_time.total_seconds()
         return int(total_seconds)
@@ -519,29 +521,21 @@ class VideoModeScreenPygame:
     # 音楽再生
     def play_sound(self, path):
         self.player = music_player.MusicPlayer(path)
-
-        # play_music_loopを別スレッドで実行
         self.music_thread = threading.Thread(target=self.player.play_music)
         self.music_thread.start()
 
     # 自動音予約
     def automatic_sound_booking(self):
-        # 初回起動時ではない時
         if hasattr(self, 'player'):
-            # 音楽を再生
             self.player = music_player.MusicPlayer(self.sound_path)
             self.music_thread = threading.Thread(target=self.player.play_music)
             self.music_thread.start()
-
-            # 停止予約（時間ベースで管理）
             self.music_stop_time = time() + (MUSIC_STOP_MINUTES * 60)
 
-        # 朝までの時間計算
         time_to_morning = self.calculate_time_next_trigger(TIME_BRIGHTNESS_HOUR, TIME_BRIGHTNESS_MINUTE)
         if time_to_morning < 1:
             time_to_morning += 86400
 
-        # 予約
         print("音が流れるまで：", int(time_to_morning), "秒")
         self.next_music_start_time = time() + time_to_morning
 
@@ -552,4 +546,4 @@ def create_screen():
     except Exception as e:
         print(f"エラーが発生しました: {e}")
         messagebox.showerror("Error", f"動画再生エラー: {e}")
-        video_mode_setting_screen.create_screen() 
+        video_mode_setting_screen.create_screen()
