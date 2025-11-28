@@ -35,7 +35,7 @@ class HomeScreen:
         """ラジオボタンを作成"""
         # modes = [("Image", "Image"), ("Study", "Study")]
         # modes = [("Image", "Image"), ("Video", "Video"), ("Study", "Study")]
-        modes = [("Video", "Video")]
+        modes = [("Image", "Image"), ("Video", "Video")]
         for mode_name, mode_value in modes:
             tk.Radiobutton(self.root, text=mode_name, variable=self.mode, value=mode_value).pack()
 
