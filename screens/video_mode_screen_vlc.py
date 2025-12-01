@@ -1,49 +1,126 @@
-from tkinter import Tk, Label
-from datetime import datetime
 import tkinter as tk
-import vlc
+import utils.settings_manager as settings_manager
 import os
+import random
+from datetime import datetime
+import threading
+from time import strftime, localtime, time
+import vlc
+from tkinter import messagebox
+import screens.video_mode_setting_screen as video_mode_setting_screen
 
-def video_mode_screen(video_folder):
-    root = Tk()
-    root.attributes("-fullscreen", True)
+# フォントサイズ設定
+DATE_FONT_SIZE = 28
+TIME_FONT_SIZE = 70
+TEXT_COLOR = "white"
 
-    # 日付と時刻表示ラベル（背景なしで前面に表示）
-    label_time = Label(root, fg="white", bg="", font=("Helvetica", 36))
-    label_time.place(relx=0.5, rely=0.9, anchor="center")
-    label_time.lift()  # 常に前面に
+class VideoModeScreenVLC:
+    def __init__(self):
+        self.image_brightness = 1.0
+        self.volume = 1.0
+        self.current_video_index = 0
+        self.last_video_change_time = time()
 
-    def update_time():
-        now = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
-        label_time.config(text=now)
-        label_time.lift()  # 定期的に前面へ（念のため）
-        root.after(1000, update_time)
+        self.initialize_settings()
+        self.create_widgets()
 
-    update_time()
+    def initialize_settings(self):
+        settings = settings_manager.load_settings()
+        self.video_path = settings.get('video_path')
+        self.interval = int(settings.get('interval'))
+        self.play_video_audio = settings.get('play_video_audio', True)
 
-    # VLCプレイヤーの設定
-    instance = vlc.Instance("--no-video-title-show", "--input-repeat=999")
-    player = instance.media_player_new()
-    video_files = [f for f in os.listdir(video_folder) if f.endswith(('.mp4', '.avi'))]
-    current_index = 0
+        self.video_files = [f for f in os.listdir(self.video_path) if f.endswith(('.mp4', '.avi', '.mov', '.mkv'))]
 
-    def play_video(index):
-        media = instance.media_new(os.path.join(video_folder, video_files[index]))
-        player.set_media(media)
-        player.set_hwnd(root.winfo_id())  # Windows用。Linuxなら player.set_xwindow()
-        player.play()
+    def create_widgets(self):
+        self.root = tk.Tk()
+        self.root.title("Video Display App (VLC)")
+        self.root.attributes('-fullscreen', True)
+        self.root.configure(bg='black')
 
-    def next_video(event=None):
-        nonlocal current_index
-        current_index = (current_index + 1) % len(video_files)
-        play_video(current_index)
+        self.canvas = tk.Canvas(self.root, bg='black', highlightthickness=0)
+        self.canvas.pack(fill=tk.BOTH, expand=True)
 
-    def exit_program(event=None):
-        player.stop()
-        root.destroy()
+        self.instance = vlc.Instance(['--no-xlib', '--quiet', '--no-video-title-show'])
+        self.player = self.instance.media_player_new()
 
-    root.bind("<space>", next_video)
-    root.bind("<Escape>", exit_program)
+        # 日付・時間テキスト（キャンバス上に描画、背景なし）
+        self.date_text_id = self.canvas.create_text(
+            self.root.winfo_screenwidth() // 2,
+            int(self.root.winfo_screenheight() * 0.85),
+            text="",
+            fill=TEXT_COLOR,
+            font=("calibri", DATE_FONT_SIZE, "bold"),
+            anchor="center"
+        )
 
-    play_video(current_index)
-    root.mainloop()
+        self.time_text_id = self.canvas.create_text(
+            self.root.winfo_screenwidth() // 2,
+            int(self.root.winfo_screenheight() * 0.92),
+            text="",
+            fill=TEXT_COLOR,
+            font=("calibri", TIME_FONT_SIZE, "bold"),
+            anchor="center"
+        )
+
+        self.play_random_video()
+        self.update_time_labels()
+
+        self.root.bind('<Escape>', lambda e: self.close_window())
+        self.root.bind('<space>', lambda e: self.next_video())
+
+        self.root.mainloop()
+
+    def play_random_video(self):
+        if not self.video_files:
+            print("動画ファイルが見つかりません")
+            return
+
+        random_file = random.choice(self.video_files)
+        video_path = os.path.join(self.video_path, random_file)
+        self.current_video_path = video_path
+
+        media = self.instance.media_new(video_path, 'input-repeat=999')
+        self.player.set_media(media)
+
+        if not self.play_video_audio:
+            self.player.audio_set_volume(0)
+
+        self.player.play()
+
+        self.root.update_idletasks()
+        if os.name == 'nt':
+            self.player.set_hwnd(self.root.winfo_id())
+        else:
+            self.player.set_xwindow(self.root.winfo_id())
+
+        print(f"動画再生開始: {random_file}")
+
+    def next_video(self):
+        self.play_random_video()
+
+    def update_time_labels(self):
+        current_date = strftime('%Y-%m-%d %A', localtime())
+        current_time = strftime('%H:%M:%S')
+
+        self.canvas.itemconfig(self.date_text_id, text=current_date)
+        self.canvas.itemconfig(self.time_text_id, text=current_time)
+
+        self.canvas.tag_raise(self.date_text_id)
+        self.canvas.tag_raise(self.time_text_id)
+
+        self.root.after(1000, self.update_time_labels)
+
+    def close_window(self):
+        print("終了します")
+        self.player.stop()
+        self.root.destroy()
+        video_mode_setting_screen.create_screen()
+
+def create_screen():
+    try:
+        VideoModeScreenVLC()
+    except Exception as e:
+        print(f"エラーが発生しました: {e}")
+        messagebox.showerror("Error", f"動画再生エラー: {e}")
+        video_mode_setting_screen.create_screen()
