@@ -3,15 +3,14 @@ import utils.settings_manager as settings_manager
 import os
 import random
 from datetime import datetime
-import threading
-from time import strftime, localtime, time
 import vlc
 from tkinter import messagebox
 import screens.video_mode_setting_screen as video_mode_setting_screen
+from time import strftime, localtime, time
 
 # フォントサイズ設定
 DATE_FONT_SIZE = 28
-TIME_FONT_SIZE = 70
+TIME_FONT_SIZE = 50
 TEXT_COLOR = "white"
 
 class VideoModeScreenVLC:
@@ -44,7 +43,7 @@ class VideoModeScreenVLC:
         self.instance = vlc.Instance(['--no-xlib', '--quiet', '--no-video-title-show'])
         self.player = self.instance.media_player_new()
 
-        # 日付・時間テキスト（キャンバス上に描画、背景なし）
+        # 日付・時間テキスト（canvas 上に描画、背景なし）
         self.date_text_id = self.canvas.create_text(
             self.root.winfo_screenwidth() // 2,
             int(self.root.winfo_screenheight() * 0.85),
@@ -100,7 +99,7 @@ class VideoModeScreenVLC:
         self.play_random_video()
 
     def update_time_labels(self):
-        current_date = strftime('%Y-%m-%d %A', localtime())
+        current_date = strftime('%Y-%m-%d (%A)', localtime())
         current_time = strftime('%H:%M:%S')
 
         self.canvas.itemconfig(self.date_text_id, text=current_date)
