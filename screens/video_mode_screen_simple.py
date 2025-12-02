@@ -60,6 +60,7 @@ class VideoModeScreenPygame:
 
         meta = self.video_reader.get_meta_data()
         fps = meta.get("fps", 30) or 30
+
         size = meta.get("size", None)
         if size:
             self.video_width, self.video_height = size
@@ -68,8 +69,10 @@ class VideoModeScreenPygame:
 
         self.rotation_needed = 90  # ★ 強制縦表示
         self.flip_needed = False
+        
+        play_fps = fps / 2
 
-        frame_interval = 1.0 / fps
+        frame_interval = 1.0 / play_fps
         clock = pygame.time.Clock()
 
         self.screen = pygame.display.set_mode(
