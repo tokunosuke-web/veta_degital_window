@@ -70,7 +70,7 @@ class VideoModeScreenPygame:
         self.rotation_needed = 90  # ★ 強制縦表示
         self.flip_needed = False
         
-        play_fps = fps / 2
+        play_fps = fps / 30
 
         frame_interval = 1.0 / play_fps
         clock = pygame.time.Clock()
