@@ -302,8 +302,8 @@ def create_screen():
         date_surface = self.date_font.render(current_date, True, (255, 255, 255))
         time_surface = self.time_font.render(current_time, True, (255, 255, 255))
         
-        self.screen.blit(date_surface, (20, 30))     # より左上に日付
-        self.screen.blit(time_surface, (20, 140))    # その下に時刻
+        self.screen.blit(date_surface, (0, 30))     # より左上に日付
+        self.screen.blit(time_surface, (0, 140))    # その下に時刻
 
     def correct_rotation(self, frame):
         rotation = self.rotation_needed
