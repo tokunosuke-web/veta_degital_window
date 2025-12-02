@@ -48,8 +48,7 @@ class VideoModeScreenPygame:
 
         # 🔽 手動でYouTubeのURLを追加
         self.video_files += [
-            "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-            "https://youtu.be/V_xrnjS9Isk"
+            "https://youtu.be/K8vjx3FjhwI?si=pGiQFpuc_9JqjUE-"
         ]
 
 
