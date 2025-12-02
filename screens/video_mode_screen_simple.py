@@ -59,7 +59,7 @@ class VideoModeScreenPygame:
             return
 
         meta = self.video_reader.get_meta_data()
-        fps = meta.get("fps", 30) or 30
+        fps = meta.get("fps", 150) or 150
 
         size = meta.get("size", None)
         if size:
