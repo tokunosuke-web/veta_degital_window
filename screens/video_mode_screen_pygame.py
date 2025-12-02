@@ -11,8 +11,8 @@ import pygame
 import imageio.v2 as iio
 import numpy as np
 # ファイルの冒頭に追加
-import mpv
-import re
+# import mpv
+# import re
 
 
 DATE_FONT_SIZE = 80
