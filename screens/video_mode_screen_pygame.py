@@ -11,8 +11,8 @@ import pygame
 import imageio.v2 as iio
 import numpy as np
 
-DATE_FONT_SIZE = 60
-TIME_FONT_SIZE = 120
+DATE_FONT_SIZE = 80
+TIME_FONT_SIZE = 160
 
 class VideoModeScreenPygame:
     def __init__(self):
@@ -294,6 +294,7 @@ def create_screen():
     def show_clock(self):
         current_date = strftime('%Y-%m-%d %A', localtime())
         current_time = strftime('%H:%M:%S', localtime())
+
         if not hasattr(self, 'date_font'):
             self.date_font = pygame.font.SysFont('calibri', DATE_FONT_SIZE, bold=True)
             self.time_font = pygame.font.SysFont('calibri', TIME_FONT_SIZE, bold=True)
@@ -301,8 +302,9 @@ def create_screen():
         date_surface = self.date_font.render(current_date, True, (255, 255, 255))
         time_surface = self.time_font.render(current_time, True, (255, 255, 255))
 
-        self.screen.blit(date_surface, (self.screen_size[0] // 3.5, self.screen_size[1] - 300))
-        self.screen.blit(time_surface, (self.screen_size[0] // 3.5, self.screen_size[1] - 150))
+        self.screen.blit(date_surface, (50, 50))    # 左上に日付
+        self.screen.blit(time_surface, (50, 150))   # 日付の下に時刻
+
 
     def correct_rotation(self, frame):
         rotation = self.rotation_needed
