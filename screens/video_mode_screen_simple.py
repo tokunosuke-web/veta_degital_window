@@ -43,12 +43,6 @@ class VideoModeScreenPygame:
             if f.endswith(('.mp4', '.avi', '.mov', '.MOV', '.mkv'))
         ]
 
-        # 🔽 手動でYouTubeのURLを追加
-        self.video_files += [
-            "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-            "https://youtu.be/V_xrnjS9Isk"
-        ]
-
 
     def create_widgets(self):
         self.update_video_widget()
