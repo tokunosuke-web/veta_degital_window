@@ -291,19 +291,19 @@ def create_screen():
 
         pygame.display.flip()
 
-    def show_clock(self):
+    def show_clock_without_margin_widget(self):
         current_date = strftime('%Y-%m-%d %A', localtime())
-        current_time = strftime('%H:%M:%S', localtime())
+        current_time = strftime('%H:%M:%S')
 
         if not hasattr(self, 'date_font'):
-            self.date_font = pygame.font.SysFont('calibri', DATE_FONT_SIZE, bold=True)
-            self.time_font = pygame.font.SysFont('calibri', TIME_FONT_SIZE, bold=True)
+            self.date_font = pygame.font.SysFont('calibri', 60, bold=True)
+            self.time_font = pygame.font.SysFont('calibri', 120, bold=True)
 
-        date_surface = self.date_font.render(current_date, True, (255, 255, 255))
-        time_surface = self.time_font.render(current_time, True, (255, 255, 255))
-        
-        self.screen.blit(date_surface, (0, 30))     # より左上に日付
-        self.screen.blit(time_surface, (0, 140))    # その下に時刻
+        current_date_surface = self.date_font.render(current_date, True, (255, 255, 255))
+        current_time_surface = self.time_font.render(current_time, True, (255, 255, 255))
+
+        self.screen.blit(current_date_surface, (50, 30))  # ← 左上に寄せる
+        self.screen.blit(current_time_surface, (50, 100))  # ← その下に時間を表示
 
     def correct_rotation(self, frame):
         rotation = self.rotation_needed
