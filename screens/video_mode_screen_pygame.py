@@ -5,7 +5,8 @@ import random
 import numpy as np
 from time import time, strftime, localtime
 
-VIDEO_PATH = "videos"  # 動画フォルダパス
+# --- 設定 ---
+VIDEO_PATH = "videos"  # 動画フォルダパス（適宜変更）
 VIDEO_EXTENSIONS = ('.mp4', '.avi', '.mov', '.MOV', '.mkv')
 DATE_FONT_SIZE = 28
 TIME_FONT_SIZE = 70
@@ -13,8 +14,6 @@ TIME_FONT_SIZE = 70
 class VideoClockDisplay:
     def __init__(self):
         self.video_files = [f for f in os.listdir(VIDEO_PATH) if f.endswith(VIDEO_EXTENSIONS)]
-        self.image_brightness = 1.0
-        self.current_video_path = None
         self.running = True
         self.initialize_display()
 
