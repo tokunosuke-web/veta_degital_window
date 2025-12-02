@@ -1,146 +1,359 @@
 import tkinter as tk
-from tkinter import messagebox
-from PIL import Image, ImageTk
-import imageio.v2 as iio  # ★ 追加：動画読み込み用
+import screens.video_mode_setting_screen as video_mode_setting_screen
+import utils.settings_manager as settings_manager
 import os
 import random
-import time
 from datetime import datetime
-import utils.fetch_weather_from_tenkijp as fetch_weather_from_tenkijp
-import screens.video_mode_setting_screen as video_mode_setting_screen
+import threading
+from tkinter import messagebox
+from time import strftime, localtime, time
+import pygame
+import imageio.v2 as iio
+import numpy as np
 
-class SimpleVideoWeatherScreen:
+
+DATE_FONT_SIZE = 80
+TIME_FONT_SIZE = 160
+
+class VideoModeScreenPygame:
     def __init__(self):
-        self.video_path = "./videos"  # 動画フォルダ
-        self.video_files = [f for f in os.listdir(self.video_path)
-                            if f.endswith(('.mp4', '.avi', '.mov', '.mkv'))]
-        self.weather_data = None
-        self.last_weather_update = 0
+        self.image_brightness = 1.0
+        self.current_video_index = 0
+        self.is_playing = False
+        self.last_video_change_time = time()
+        self.running = True
+        self.initialize_settings()
+        self.create_widgets()
 
-        self.root = tk.Tk()
-        self.root.attributes('-fullscreen', True)
-        self.root.configure(bg='black')
+    def initialize_settings(self):
+        settings = settings_manager.load_settings()
+        self.video_path = settings.get('video_path')
+        self.interval = int(settings.get('interval'))
+        self.automatic_brightness = settings.get('automatic_brightness')
+        self.show_time = True
+        self.show_weather = False
+        self.show_train_schedule = False
+        self.sound_path = ""
+        self.sound_mode = "0"
+        self.preserve_quality = settings.get('preserve_quality', True)
+        self.play_video_audio = settings.get('play_video_audio', False)
 
-        # 背景動画
-        self.video_label = tk.Label(self.root, bg='black')
-        self.video_label.pack(expand=True, fill='both')
+        self.video_files = [
+            f for f in os.listdir(self.video_path)
+            if f.endswith(('.mp4', '.avi', '.mov', '.MOV', '.mkv'))
+        ]
 
-        # 下部オーバーレイ
-        self.overlay = tk.Frame(self.root, bg='black')
-        self.overlay.place(relx=0, rely=0.85, relwidth=1.0, relheight=0.15)
+        # 🔽 手動でYouTubeのURLを追加
+        self.video_files += [
+            "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            "https://youtu.be/V_xrnjS9Isk"
+        ]
 
-        self.time_label = tk.Label(self.overlay, fg='white', bg='black', font=('Arial', 60, 'bold'))
-        self.time_label.pack(side='left', padx=40)
 
-        self.date_label = tk.Label(self.overlay, fg='white', bg='black', font=('Arial', 30))
-        self.date_label.pack(side='left')
+    def create_widgets(self):
+        self.update_video_widget()
 
-        self.weather_label = tk.Label(self.overlay, fg='white', bg='black', font=('Arial', 24))
-        self.weather_label.pack(side='right', padx=40)
-
-        self.root.bind('<Escape>', lambda e: self.close_window())
-
-        # 動画と表示更新を開始
-        self.play_random_video()
-        self.update_weather()
-        self.update_display()
-        self.root.mainloop()
-
-    def play_random_video(self):
-        """ランダムな動画ファイルを選んで reader を準備"""
-        if not self.video_files:
-            messagebox.showerror("Error", "動画ファイルが見つかりません")
-            self.root.destroy()
-            return
-
-        random_file = random.choice(self.video_files)
-        path = os.path.join(self.video_path, random_file)
-
+    def update_video_widget(self):
+        random_video_path = self.make_random_file_path(self.video_path, self.video_files)
+        self.current_video_path = random_video_path
+        pygame.init()
+        pygame.display.set_caption("Video Display App")
         try:
-            # imageio の VideoReader を作成
-            self.video_reader = iio.get_reader(path)
+            self.video_reader = iio.get_reader(random_video_path)
         except Exception as e:
-            messagebox.showerror("Error", f"動画を開けません: {path}\n{e}")
-            self.root.destroy()
+            print(f"動画ファイルを開けません: {random_video_path} / {e}")
             return
 
-        # メタデータから fps を取得（無ければ 30fps）
         meta = self.video_reader.get_meta_data()
-        fps = meta.get('fps', 30) or 30
-        self.frame_interval = 1.0 / fps
+        fps = meta.get("fps", 30) or 30
+        size = meta.get("size", None)
+        if size:
+            self.video_width, self.video_height = size
+        else:
+            self.video_width, self.video_height = 0, 0
 
-        # フレームイテレータを準備
+        self.rotation_needed = 90  # ★ 強制縦表示
+        self.flip_needed = False
+
+        frame_interval = 1.0 / fps
+        clock = pygame.time.Clock()
+
+        self.screen = pygame.display.set_mode(
+            (pygame.display.Info().current_w, pygame.display.Info().current_h),
+            pygame.FULLSCREEN
+        )
+
         self.frame_iterator = iter(self.video_reader)
+        self.screen_size = (self.screen.get_width(), self.screen.get_height())
+        self.scale_ratio = None
 
-    def update_display(self):
-        """フレーム更新＋時刻・天気更新"""
-        frame = None
+        last_frame_time = time()
+
+        while self.running:
+            current_time = time()
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key in [pygame.K_ESCAPE, pygame.K_q]):
+                    self.close_window()
+
+            if current_time - last_frame_time >= frame_interval:
+                self.update_video_frame()
+                last_frame_time = current_time
+
+            if current_time - self.last_video_change_time >= self.interval:
+                self.last_video_change_time = current_time
+                self.next_video()
+
+            clock.tick(int(fps))
+  
+
+    def update_video_frame(self):
         try:
-            # 次のフレームを取得
             frame = next(self.frame_iterator)
         except StopIteration:
-            # 動画が終わったら最初から再生
-            try:
-                self.frame_iterator = iter(self.video_reader)
-                frame = next(self.frame_iterator)
-            except Exception:
-                frame = None
+            self.video_reader.close()
+            self.video_reader = iio.get_reader(self.current_video_path)
+            self.frame_iterator = iter(self.video_reader)
+            frame = next(self.frame_iterator)
 
-        if frame is not None:
-            # frame: (H, W, 3) ndarray, RGB 想定
-            pil_image = Image.fromarray(frame)
+        frame = self.correct_rotation(frame)
+        frame_surface = pygame.surfarray.make_surface(frame)
 
-            # 画面サイズにリサイズ
-            screen_w = self.root.winfo_screenwidth()
-            screen_h = self.root.winfo_screenheight()
-            pil_image = pil_image.resize((screen_w, screen_h))
+        if not self.scale_ratio:
+            self.scale_ratio = max(
+                self.screen_size[0] / frame_surface.get_width(),
+                self.screen_size[1] / frame_surface.get_height()
+            )
 
-            photo = ImageTk.PhotoImage(pil_image)
-            self.video_label.configure(image=photo)
-            self.video_label.image = photo
-            self.overlay.lift()
+        new_size = (int(frame_surface.get_width() * self.scale_ratio),
+                    int(frame_surface.get_height() * self.scale_ratio))
 
-        # 時刻・日付更新
-        self.update_time_labels()
+        frame_surface = pygame.transform.scale(frame_surface, new_size)
 
-        # 天気は1時間ごとに更新
-        if time.time() - self.last_weather_update > 3600:
-            self.update_weather()
+        offset_x = (new_size[0] - self.screen_size[0]) // 2
+        offset_y = (new_size[1] - self.screen_size[1]) // 2
 
-        # 次フレームのスケジュール
-        delay_ms = int(self.frame_interval * 1000)
-        self.root.after(delay_ms, self.update_display)
+        clip_area = pygame.Rect(offset_x, offset_y, *self.screen_size)
+        self.screen.blit(frame_surface, (0, 0), area=clip_area)
 
-    def update_time_labels(self):
-        now = datetime.now()
-        self.time_label.config(text=now.strftime("%H:%M:%S"))
-        self.date_label.config(text="  " + now.strftime("%Y-%m-%d (%a)"))
+        if self.image_brightness < 1.0:
+            overlay = pygame.Surface(self.screen_size)
+            overlay.fill((0, 0, 0))
+            overlay.set_alpha(int(255 - self.image_brightness * 255))
+            self.screen.blit(overlay, (0, 0))
 
-    def update_weather(self):
+        if self.show_time:
+            self.show_clock()
+
+        pygame.display.flip()
+
+    def show_clock(self):
+        current_date = strftime('%Y-%m-%d %A', localtime())
+        current_time = strftime('%H:%M:%S', localtime())
+        if not hasattr(self, 'date_font'):
+            self.date_font = pygame.font.SysFont('calibri', DATE_FONT_SIZE, bold=True)
+            self.time_font = pygame.font.SysFont('calibri', TIME_FONT_SIZE, bold=True)
+
+        date_surface = self.date_font.render(current_date, True, (255, 255, 255))
+        time_surface = self.time_font.render(current_time, True, (255, 255, 255))
+
+        self.screen.blit(date_surface, (self.screen_size[0] // 3.5, 80))
+        self.screen.blit(time_surface, (self.screen_size[0] // 3.5, 180))
+
+    def correct_rotation(self, frame):
+        rotation = self.rotation_needed
+        if rotation == 90:
+            return np.rot90(frame, k=1)
+        elif rotation == 180:
+            return np.rot90(frame, k=2)
+        elif rotation == 270:
+            return np.rot90(frame, k=3)
+        return frame
+
+    def make_random_file_path(self, path, files):
+        return os.path.join(path, random.choice(files))
+
+    def next_video(self):
+        self.running = False
         try:
-            data = fetch_weather_from_tenkijp.get_precipitation_forecast()
-            if isinstance(data, dict):
-                text = data.get("today", {}).get("summary", "天気情報なし")
-            else:
-                text = str(data)
-            self.weather_label.config(text=text[:50])
-        except Exception as e:
-            print("天気データ取得エラー:", e)
-            self.weather_label.config(text="天気情報取得中...")
-        self.last_weather_update = time.time()
-
-    def close_window(self):
-        try:
-            if hasattr(self, 'video_reader'):
-                self.video_reader.close()
+            self.video_reader.close()
         except Exception:
             pass
-        self.root.destroy()
+        self.update_video_widget()
+
+    def close_window(self):
+        print("終了します")
+        self.running = False
+        try:
+            self.video_reader.close()
+        except Exception:
+            pass
+        pygame.quit()
         video_mode_setting_screen.create_screen()
 
 def create_screen():
     try:
-        SimpleVideoWeatherScreen()
+        VideoModeScreenPygame()
     except Exception as e:
-        messagebox.showerror("Error", f"起動エラー: {e}")
+        print(f"エラーが発生しました: {e}")
+        messagebox.showerror("Error", f"動画再生エラー: {e}")
+        video_mode_setting_screen.create_screen()
+        self.preserve_quality = settings.get('preserve_quality', True)
+        self.play_video_audio = settings.get('play_video_audio', False)
+
+        self.video_files = [
+            f for f in os.listdir(self.video_path)
+            if f.endswith(('.mp4', '.avi', '.mov', '.MOV', '.mkv'))
+        ]
+
+    def create_widgets(self):
+        self.update_video_widget()
+
+    def update_video_widget(self):
+        random_video_path = self.make_random_file_path(self.video_path, self.video_files)
+        self.current_video_path = random_video_path
+        pygame.init()
+        pygame.display.set_caption("Video Display App")
+        try:
+            self.video_reader = iio.get_reader(random_video_path)
+        except Exception as e:
+            print(f"動画ファイルを開けません: {random_video_path} / {e}")
+            return
+
+        meta = self.video_reader.get_meta_data()
+        fps = meta.get("fps", 30) or 30
+        size = meta.get("size", None)
+        if size:
+            self.video_width, self.video_height = size
+        else:
+            self.video_width, self.video_height = 0, 0
+
+        self.rotation_needed = self.determine_rotation_needed()
+        self.flip_needed = False
+
+        frame_interval = 1.0 / fps
+        clock = pygame.time.Clock()
+
+        self.screen = pygame.display.set_mode(
+            (pygame.display.Info().current_w, pygame.display.Info().current_h),
+            pygame.FULLSCREEN
+        )
+
+        self.frame_iterator = iter(self.video_reader)
+        self.screen_size = (self.screen.get_width(), self.screen.get_height())
+        self.scale_ratio = None
+
+        last_frame_time = time()
+
+        while self.running:
+            current_time = time()
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key in [pygame.K_ESCAPE, pygame.K_q]):
+                    self.close_window()
+
+            if current_time - last_frame_time >= frame_interval:
+                self.update_video_frame()
+                last_frame_time = current_time
+
+            if current_time - self.last_video_change_time >= self.interval:
+                self.last_video_change_time = current_time
+                self.next_video()
+
+            clock.tick(int(fps))
+
+    def update_video_frame(self):
+        try:
+            frame = next(self.frame_iterator)
+        except StopIteration:
+            self.video_reader.close()
+            self.video_reader = iio.get_reader(self.current_video_path)
+            self.frame_iterator = iter(self.video_reader)
+            frame = next(self.frame_iterator)
+
+        frame = self.correct_rotation(frame)
+        frame_surface = pygame.surfarray.make_surface(frame)
+
+        if not self.scale_ratio:
+            self.scale_ratio = max(
+                self.screen_size[0] / frame_surface.get_width(),
+                self.screen_size[1] / frame_surface.get_height()
+            )
+
+        new_size = (int(frame_surface.get_width() * self.scale_ratio),
+                    int(frame_surface.get_height() * self.scale_ratio))
+
+        frame_surface = pygame.transform.scale(frame_surface, new_size)
+
+        offset_x = (new_size[0] - self.screen_size[0]) // 2
+        offset_y = (new_size[1] - self.screen_size[1]) // 2
+
+        clip_area = pygame.Rect(offset_x, offset_y, *self.screen_size)
+        self.screen.blit(frame_surface, (0, 0), area=clip_area)
+
+        if self.image_brightness < 1.0:
+            overlay = pygame.Surface(self.screen_size)
+            overlay.fill((0, 0, 0))
+            overlay.set_alpha(int(255 - self.image_brightness * 255))
+            self.screen.blit(overlay, (0, 0))
+
+        if self.show_time:
+            self.show_clock()
+
+        pygame.display.flip()
+
+    def show_clock_without_margin_widget(self):
+        current_date = strftime('%Y-%m-%d %A', localtime())
+        current_time = strftime('%H:%M:%S')
+
+        if not hasattr(self, 'date_font'):
+            self.date_font = pygame.font.SysFont('calibri', 60, bold=True)
+            self.time_font = pygame.font.SysFont('calibri', 120, bold=True)
+
+        current_date_surface = self.date_font.render(current_date, True, (255, 255, 255))
+        current_time_surface = self.time_font.render(current_time, True, (255, 255, 255))
+
+        self.screen.blit(current_date_surface, (50, 30))  # ← 左上に寄せる
+        self.screen.blit(current_time_surface, (50, 100))  # ← その下に時間を表示
+
+    def correct_rotation(self, frame):
+        rotation = self.rotation_needed
+        if rotation == 90:
+            return np.rot90(frame, k=1)
+        elif rotation == 180:
+            return np.rot90(frame, k=2)
+        elif rotation == 270:
+            return np.rot90(frame, k=3)
+        return frame
+
+    def determine_rotation_needed(self):
+        if self.video_height > self.video_width and self.video_height / max(self.video_width, 1) > 1.3:
+            return 90
+        return 0
+
+    def make_random_file_path(self, path, files):
+        return os.path.join(path, random.choice(files))
+
+    def next_video(self):
+        self.running = False
+        try:
+            self.video_reader.close()
+        except Exception:
+            pass
+        self.update_video_widget()
+
+    def close_window(self):
+        print("終了します")
+        self.running = False
+        try:
+            self.video_reader.close()
+        except Exception:
+            pass
+        pygame.quit()
+        video_mode_setting_screen.create_screen()
+
+def create_screen():
+    try:
+        VideoModeScreenPygame()
+    except Exception as e:
+        print(f"エラーが発生しました: {e}")
+        messagebox.showerror("Error", f"動画再生エラー: {e}")
         video_mode_setting_screen.create_screen()
