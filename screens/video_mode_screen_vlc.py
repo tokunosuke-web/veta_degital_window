@@ -1,124 +1,51 @@
 import tkinter as tk
-import utils.settings_manager as settings_manager
-import os
-import random
-from datetime import datetime
-import vlc
-from tkinter import messagebox
 import screens.video_mode_setting_screen as video_mode_setting_screen
-from time import strftime, localtime, time
+import utils.settings_manager as settings_manager
+import random
+import threading
+from tkinter import messagebox
+from time import time, strftime, localtime
+import mpv
 
-# フォントサイズ設定
-DATE_FONT_SIZE = 28
-TIME_FONT_SIZE = 50
-TEXT_COLOR = "white"
-
-class VideoModeScreenVLC:
+class VideoModeScreenPygame:
     def __init__(self):
-        self.image_brightness = 1.0
-        self.volume = 1.0
         self.current_video_index = 0
         self.last_video_change_time = time()
-
+        self.running = True
         self.initialize_settings()
-        self.create_widgets()
+        self.play_next_youtube_video()
 
     def initialize_settings(self):
         settings = settings_manager.load_settings()
-        self.video_path = settings.get('video_path')
         self.interval = int(settings.get('interval'))
-        self.play_video_audio = settings.get('play_video_audio', True)
+        self.show_time = True
 
-        self.video_files = [f for f in os.listdir(self.video_path) if f.endswith(('.mp4', '.avi', '.mov', '.mkv'))]
+        # ✅ YouTubeのURLだけを動画リストに追加
+        self.video_files = [
+            "https://youtu.be/K8vjx3FjhwI?si=6IIxucVD7YanOr-f"
+        ]
 
-    def create_widgets(self):
-        self.root = tk.Tk()
-        self.root.title("Video Display App (VLC)")
-        self.root.attributes('-fullscreen', True)
-        self.root.configure(bg='black')
-
-        self.canvas = tk.Canvas(self.root, bg='black', highlightthickness=0)
-        self.canvas.pack(fill=tk.BOTH, expand=True)
-
-        self.instance = vlc.Instance(['--no-xlib', '--quiet', '--no-video-title-show'])
-        self.player = self.instance.media_player_new()
-
-        # 日付・時間テキスト（canvas 上に描画、背景なし）
-        self.date_text_id = self.canvas.create_text(
-            self.root.winfo_screenwidth() // 2,
-            int(self.root.winfo_screenheight() * 0.85),
-            text="",
-            fill=TEXT_COLOR,
-            font=("calibri", DATE_FONT_SIZE, "bold"),
-            anchor="center"
-        )
-
-        self.time_text_id = self.canvas.create_text(
-            self.root.winfo_screenwidth() // 2,
-            int(self.root.winfo_screenheight() * 0.92),
-            text="",
-            fill=TEXT_COLOR,
-            font=("calibri", TIME_FONT_SIZE, "bold"),
-            anchor="center"
-        )
-
-        self.play_random_video()
-        self.update_time_labels()
-
-        self.root.bind('<Escape>', lambda e: self.close_window())
-        self.root.bind('<space>', lambda e: self.next_video())
-
-        self.root.mainloop()
-
-    def play_random_video(self):
-        if not self.video_files:
-            print("動画ファイルが見つかりません")
-            return
-
-        random_file = random.choice(self.video_files)
-        video_path = os.path.join(self.video_path, random_file)
-        self.current_video_path = video_path
-
-        media = self.instance.media_new(video_path, 'input-repeat=999')
-        self.player.set_media(media)
-
-        if not self.play_video_audio:
-            self.player.audio_set_volume(0)
-
-        self.player.play()
-
-        self.root.update_idletasks()
-        if os.name == 'nt':
-            self.player.set_hwnd(self.root.winfo_id())
-        else:
-            self.player.set_xwindow(self.root.winfo_id())
-
-        print(f"動画再生開始: {random_file}")
-
-    def next_video(self):
-        self.play_random_video()
-
-    def update_time_labels(self):
-        current_date = strftime('%Y-%m-%d (%A)', localtime())
-        current_time = strftime('%H:%M:%S')
-
-        self.canvas.itemconfig(self.date_text_id, text=current_date)
-        self.canvas.itemconfig(self.time_text_id, text=current_time)
-
-        self.canvas.tag_raise(self.date_text_id)
-        self.canvas.tag_raise(self.time_text_id)
-
-        self.root.after(1000, self.update_time_labels)
+    def play_next_youtube_video(self):
+        # ランダム選択
+        url = random.choice(self.video_files)
+        print(f"再生開始: {url}")
+        try:
+            player = mpv.MPV(fullscreen=True, loop="inf")
+            player.play(url)
+            player.wait_for_playback()
+        except Exception as e:
+            print(f"再生エラー: {e}")
+            messagebox.showerror("再生エラー", str(e))
+            self.close_window()
 
     def close_window(self):
         print("終了します")
-        self.player.stop()
-        self.root.destroy()
+        self.running = False
         video_mode_setting_screen.create_screen()
 
 def create_screen():
     try:
-        VideoModeScreenVLC()
+        VideoModeScreenPygame()
     except Exception as e:
         print(f"エラーが発生しました: {e}")
         messagebox.showerror("Error", f"動画再生エラー: {e}")
