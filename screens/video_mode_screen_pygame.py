@@ -56,14 +56,21 @@ class VideoModeScreenPygame:
         self.update_video_widget()
 
     def update_video_widget(self):
-        random_video_path = self.make_random_file_path(self.video_path, self.video_files)
-        self.current_video_path = random_video_path
+        random_video = self.make_random_file_path(self.video_path, self.video_files)
+        self.current_video_path = random_video
+
+        # YouTubeリンクなら mpv で再生
+        if random_video.startswith("http"):
+            self.play_youtube_with_mpv(random_video)
+            return
+
         pygame.init()
         pygame.display.set_caption("Video Display App")
+
         try:
-            self.video_reader = iio.get_reader(random_video_path)
+            self.video_reader = iio.get_reader(os.path.join(self.video_path, random_video))
         except Exception as e:
-            print(f"動画ファイルを開けません: {random_video_path} / {e}")
+            print(f"動画ファイルを開けません: {random_video} / {e}")
             return
 
         meta = self.video_reader.get_meta_data()
@@ -185,7 +192,8 @@ class VideoModeScreenPygame:
         return frame
 
     def make_random_file_path(self, path, files):
-        return os.path.join(path, random.choice(files))
+        return random.choice(files)  # ローカルファイルとURLを区別せずそのまま返す
+
 
     def next_video(self):
         self.running = False
