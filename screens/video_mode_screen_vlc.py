@@ -5,7 +5,7 @@ import random
 import threading
 from tkinter import messagebox
 from time import time, strftime, localtime
-import mpv
+# import mpv
 
 class VideoModeScreenPygame:
     def __init__(self):
