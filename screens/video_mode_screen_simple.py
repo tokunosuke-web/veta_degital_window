@@ -67,10 +67,14 @@ class VideoModeScreenPygame:
         else:
             self.video_width, self.video_height = 0, 0
 
-        self.rotation_needed = 90  # ★ 強制縦表示
+        # ★ 修正: 強制的な縦表示（回転）を削除し、適切な自動判定ロジックを使用
+        # 強制縦表示の行を削除
+        # self.rotation_needed = 90  
+        self.rotation_needed = self.determine_rotation_needed()
         self.flip_needed = False
         
-        play_fps = fps / 5
+        # ★ 修正: FPSを1/5に落とすのをやめ、動画の元のFPSを使用
+        play_fps = fps # 修正前: play_fps = fps / 5 
 
         frame_interval = 1.0 / play_fps
         clock = pygame.time.Clock()
@@ -100,8 +104,9 @@ class VideoModeScreenPygame:
                 self.last_video_change_time = current_time
                 self.next_video()
 
-            clock.tick(int(fps))
-  
+            # ★ 修正: clock.tickの引数を play_fps (元のFPS) に変更し、スムーズに
+            clock.tick(int(play_fps))
+    
 
     def update_video_frame(self):
         try:
@@ -124,7 +129,12 @@ class VideoModeScreenPygame:
         new_size = (int(frame_surface.get_width() * self.scale_ratio),
                     int(frame_surface.get_height() * self.scale_ratio))
 
-        frame_surface = pygame.transform.scale(frame_surface, new_size)
+        # ★ 修正: preserve_qualityがTrueの場合、高品質なスケーリング (smoothscale) を使用してガビつきを軽減
+        if self.preserve_quality:
+            frame_surface = pygame.transform.smoothscale(frame_surface, new_size)
+        else:
+            frame_surface = pygame.transform.scale(frame_surface, new_size)
+
 
         offset_x = (new_size[0] - self.screen_size[0]) // 2
         offset_y = (new_size[1] - self.screen_size[1]) // 2
@@ -142,6 +152,8 @@ class VideoModeScreenPygame:
             self.show_clock()
 
         pygame.display.flip()
+# ... (後略: show_clock, correct_rotation, make_random_file_path, next_video, close_window, create_screen の前半部分は元のコードと同じため省略) ...
+# ... (ここから、create_screen内の重複していた部分を維持して記述) ...
 
     def show_clock(self):
         current_date = strftime('%Y-%m-%d %A', localtime())
@@ -166,6 +178,17 @@ class VideoModeScreenPygame:
             return np.rot90(frame, k=3)
         return frame
 
+    def determine_rotation_needed(self):
+        # 画面の向きと動画の向きを考慮して、90度回転が必要か判断
+        screen_is_portrait = self.screen_size[1] > self.screen_size[0]
+        video_is_portrait = self.video_height > self.video_width
+        
+        if screen_is_portrait and not video_is_portrait:
+            # 画面が縦で動画が横の場合、回転が必要 (90度)
+            return 90
+        # 詳細なアスペクト比チェックは一旦省略し、デフォルトの0を返す
+        return 0 
+    
     def make_random_file_path(self, path, files):
         return os.path.join(path, random.choice(files))
 
@@ -194,6 +217,8 @@ def create_screen():
         print(f"エラーが発生しました: {e}")
         messagebox.showerror("Error", f"動画再生エラー: {e}")
         video_mode_setting_screen.create_screen()
+        
+        # ★ ここから、create_screenの後半にあった重複部分を維持
         self.preserve_quality = settings.get('preserve_quality', True)
         self.play_video_audio = settings.get('play_video_audio', False)
 
@@ -227,7 +252,10 @@ def create_screen():
         self.rotation_needed = self.determine_rotation_needed()
         self.flip_needed = False
 
-        frame_interval = 1.0 / fps
+        # ★ 修正: FPSを1/5にするのをやめ、元のFPSを使用
+        play_fps = fps # 修正前: play_fps = fps / 5 
+        
+        frame_interval = 1.0 / play_fps
         clock = pygame.time.Clock()
 
         self.screen = pygame.display.set_mode(
@@ -255,7 +283,8 @@ def create_screen():
                 self.last_video_change_time = current_time
                 self.next_video()
 
-            clock.tick(int(fps))
+            # ★ 修正: clock.tickの引数を play_fps (元のFPS) に変更し、スムーズに
+            clock.tick(int(play_fps))
 
     def update_video_frame(self):
         try:
@@ -278,7 +307,11 @@ def create_screen():
         new_size = (int(frame_surface.get_width() * self.scale_ratio),
                     int(frame_surface.get_height() * self.scale_ratio))
 
-        frame_surface = pygame.transform.scale(frame_surface, new_size)
+        # ★ 修正: preserve_qualityフラグに応じてsmoothscaleを使用
+        if self.preserve_quality:
+            frame_surface = pygame.transform.smoothscale(frame_surface, new_size)
+        else:
+            frame_surface = pygame.transform.scale(frame_surface, new_size)
 
         offset_x = (new_size[0] - self.screen_size[0]) // 2
         offset_y = (new_size[1] - self.screen_size[1]) // 2
@@ -293,7 +326,7 @@ def create_screen():
             self.screen.blit(overlay, (0, 0))
 
         if self.show_time:
-            self.show_clock()
+            self.show_clock_without_margin_widget()
 
         pygame.display.flip()
 
@@ -309,7 +342,7 @@ def create_screen():
         current_time_surface = self.time_font.render(current_time, True, (255, 255, 255))
 
         self.screen.blit(current_date_surface, (50, 30))  # ← 左上に寄せる
-        self.screen.blit(current_time_surface, (50, 100))  # ← その下に時間を表示
+        self.screen.blit(current_time_surface, (50, 100)) # ← その下に時間を表示
 
     def correct_rotation(self, frame):
         rotation = self.rotation_needed
