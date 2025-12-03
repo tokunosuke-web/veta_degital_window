@@ -107,7 +107,22 @@ class VideoModeScreenPygame:
 
             clock.tick(int(fps))
   
+    def determine_rotation_needed(self):
+        """
+        動画の縦横比と画面の縦横比に基づき、90度回転が必要か判断する。
+        """
+        # 画面の縦横比を取得
+        screen_is_portrait = self.screen.get_height() > self.screen.get_width()
+        # 動画の縦横比を取得
+        video_is_portrait = self.video_height > self.video_width
 
+        # 画面が縦向きで、動画が横向きの場合に回転が必要
+        if screen_is_portrait and not video_is_portrait:
+            return 90
+        
+        # それ以外の場合は回転不要
+        return 0
+        
     def update_video_frame(self):
         try:
             frame = next(self.frame_iterator)
