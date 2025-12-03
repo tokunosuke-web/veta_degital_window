@@ -67,10 +67,11 @@ class VideoModeScreenPygame:
         else:
             self.video_width, self.video_height = 0, 0
 
-        self.rotation_needed = 90  # ★ 強制縦表示
+        # self.rotation_needed = 90  # ★ 強制縦表示の行を削除
+        self.rotation_needed = self.determine_rotation_needed()
         self.flip_needed = False
         
-        play_fps = fps / 5
+        play_fps = fps
 
         frame_interval = 1.0 / play_fps
         clock = pygame.time.Clock()
@@ -123,8 +124,11 @@ class VideoModeScreenPygame:
 
         new_size = (int(frame_surface.get_width() * self.scale_ratio),
                     int(frame_surface.get_height() * self.scale_ratio))
-
-        frame_surface = pygame.transform.scale(frame_surface, new_size)
+        
+        if self.preserve_quality:
+            frame_surface = pygame.transform.smoothscale(frame_surface, new_size)
+        else:
+            frame_surface = pygame.transform.scale(frame_surface, new_size)
 
         offset_x = (new_size[0] - self.screen_size[0]) // 2
         offset_y = (new_size[1] - self.screen_size[1]) // 2
