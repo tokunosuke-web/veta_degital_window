@@ -67,27 +67,19 @@ class VideoModeScreenPygame:
         else:
             self.video_width, self.video_height = 0, 0
 
-        # ----------------------------------------------------------------
-        # 画面を作成する前に、回転に必要な情報を先に定義
-        self.rotation_needed = self.determine_rotation_needed(0) # 修正ポイントA
+        self.rotation_needed = 90  # ★ 強制縦表示
         self.flip_needed = False
-        # ----------------------------------------------------------------
         
-        play_fps = fps 
+        play_fps = fps / 5
 
         frame_interval = 1.0 / play_fps
         clock = pygame.time.Clock()
 
-        # ★ 修正ポイント B: self.screen を作成する
         self.screen = pygame.display.set_mode(
             (pygame.display.Info().current_w, pygame.display.Info().current_h),
             pygame.FULLSCREEN
         )
 
-        # ★ 修正ポイント C: 画面サイズに依存する変数をここで設定する
-        self.screen_size = (self.screen.get_width(), self.screen.get_height())
-        # rotation_needed の再計算が必要な場合は、ここで self.determine_rotation_needed() を実行する
-        
         self.frame_iterator = iter(self.video_reader)
         self.screen_size = (self.screen.get_width(), self.screen.get_height())
         self.scale_ratio = None
@@ -110,22 +102,7 @@ class VideoModeScreenPygame:
 
             clock.tick(int(fps))
   
-    def determine_rotation_needed(self):
-        """
-        動画の縦横比と画面の縦横比に基づき、90度回転が必要か判断する。
-        """
-        # 画面の縦横比を取得
-        screen_is_portrait = self.screen.get_height() > self.screen.get_width()
-        # 動画の縦横比を取得
-        video_is_portrait = self.video_height > self.video_width
 
-        # 画面が縦向きで、動画が横向きの場合に回転が必要
-        if screen_is_portrait and not video_is_portrait:
-            return 90
-        
-        # それ以外の場合は回転不要
-        return 0
-        
     def update_video_frame(self):
         try:
             frame = next(self.frame_iterator)
@@ -147,16 +124,8 @@ class VideoModeScreenPygame:
         new_size = (int(frame_surface.get_width() * self.scale_ratio),
                     int(frame_surface.get_height() * self.scale_ratio))
 
-        # frame_surface = pygame.transform.scale(frame_surface, new_size)
-        # ★ 変更点 1: ここからスケーリング処理を変更
-        if self.preserve_quality:
-            # 画質維持設定がTrueの場合、より高品質な smoothscale を使用してガビつきを軽減
-            frame_surface = pygame.transform.smoothscale(frame_surface, new_size)
-        else:
-            # 画質維持設定がFalseの場合、元の transform.scale (高速だが画質は劣る) を使用
-            frame_surface = pygame.transform.scale(frame_surface, new_size)
-        # ★ 変更点 1: ここまで
-        
+        frame_surface = pygame.transform.scale(frame_surface, new_size)
+
         offset_x = (new_size[0] - self.screen_size[0]) // 2
         offset_y = (new_size[1] - self.screen_size[1]) // 2
 
