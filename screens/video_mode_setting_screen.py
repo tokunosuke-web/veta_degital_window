@@ -58,8 +58,8 @@ class VideoModeSettingScreen:
         # 動画エンジン選択
         tk.Label(settings_frame, text="Video Engine:").grid(row=11, column=0, sticky="w")
         tk.Radiobutton(settings_frame, text="Simple (Recommended)", variable=self.video_engine_var, value="simple").grid(row=11, column=1, sticky="w")
-        tk.Radiobutton(settings_frame, text="VLC", variable=self.video_engine_var, value="vlc").grid(row=12, column=1, sticky="w")
-        tk.Radiobutton(settings_frame, text="Pygame+OpenCV", variable=self.video_engine_var, value="pygame").grid(row=13, column=1, sticky="w")
+        #tk.Radiobutton(settings_frame, text="VLC", variable=self.video_engine_var, value="vlc").grid(row=12, column=1, sticky="w")
+        #tk.Radiobutton(settings_frame, text="Pygame+OpenCV", variable=self.video_engine_var, value="pygame").grid(row=13, column=1, sticky="w")
 
         # アクションボタン
         tk.Button(settings_frame, text="<< Back", command=self.back_action).grid(row=14, column=0, pady=10)
