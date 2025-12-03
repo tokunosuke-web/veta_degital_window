@@ -67,24 +67,27 @@ class VideoModeScreenPygame:
         else:
             self.video_width, self.video_height = 0, 0
 
-        # self.rotation_needed = 90  # ★ 強制縦表示の行を削除
-        self.rotation_needed = self.determine_rotation_needed()
+        # ----------------------------------------------------------------
+        # 画面を作成する前に、回転に必要な情報を先に定義
+        self.rotation_needed = self.determine_rotation_needed(0) # 修正ポイントA
         self.flip_needed = False
+        # ----------------------------------------------------------------
         
-       # 修正前のコードにあった、FPSを1/5にする行を削除 (元のコードにはありませんが、以前のやり取りで言及があったため修正)
-        # play_fps = fps / 5 
-
-        # 修正後のコードで、元のFPSを使用
-        play_fps = fps
+        play_fps = fps 
 
         frame_interval = 1.0 / play_fps
         clock = pygame.time.Clock()
 
+        # ★ 修正ポイント B: self.screen を作成する
         self.screen = pygame.display.set_mode(
             (pygame.display.Info().current_w, pygame.display.Info().current_h),
             pygame.FULLSCREEN
         )
 
+        # ★ 修正ポイント C: 画面サイズに依存する変数をここで設定する
+        self.screen_size = (self.screen.get_width(), self.screen.get_height())
+        # rotation_needed の再計算が必要な場合は、ここで self.determine_rotation_needed() を実行する
+        
         self.frame_iterator = iter(self.video_reader)
         self.screen_size = (self.screen.get_width(), self.screen.get_height())
         self.scale_ratio = None
