@@ -67,8 +67,7 @@ class VideoModeScreenPygame:
         else:
             self.video_width, self.video_height = 0, 0
 
-        # self.rotation_needed = 90  # ★ 強制縦表示の行を削除
-        self.rotation_needed = self.determine_rotation_needed()
+        self.rotation_needed = 90  # ★ 強制縦表示の行を削除
         self.flip_needed = False
         
         play_fps = fps
