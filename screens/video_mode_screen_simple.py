@@ -107,10 +107,10 @@ class VideoModeScreenPygame:
         try:
             frame = next(self.frame_iterator)
         except StopIteration:
-            # ★ 修正: 動画が最後まで再生されたら、次の動画に切り替える
             self.video_reader.close()
-            self.next_video()  # next_videoを呼び出して、新しい動画でウィジェットを更新し、ループを再開
-            return # フレーム処理を中断し、次のフレームで新しい動画がロードされるのを待つ
+            self.video_reader = iio.get_reader(self.current_video_path)
+            self.frame_iterator = iter(self.video_reader)
+            frame = next(self.frame_iterator)
 
         frame = self.correct_rotation(frame)
         frame_surface = pygame.surfarray.make_surface(frame)
