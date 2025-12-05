@@ -173,7 +173,7 @@ class VideoModeScreenPygame:
         return os.path.join(path, random.choice(files))
 
     def next_video(self):
-        self.running = False
+        self.running = True
         try:
             self.video_reader.close()
         except Exception:
