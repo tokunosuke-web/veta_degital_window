@@ -36,7 +36,7 @@ class VideoModeSettingScreen:
         self.show_train_schedule_var = tk.BooleanVar(value=settings.get('show_train_schedule'))
         self.sound_path_var = tk.StringVar(value=settings.get('sound_path'))
         self.sound_mode_var = tk.StringVar(value=settings.get('sound_mode'))
-        self.video_engine_var = tk.StringVar(value=settings.get('video_engine', 'simple', 'vlc', 'pygame'))  # デフォルトはSimple
+        self.video_engine_var = tk.StringVar(value=settings.get('video_engine', 'simple'))  # デフォルトはSimple
 
     def create_widgets(self):
         settings_frame = tk.Frame(self.root)
