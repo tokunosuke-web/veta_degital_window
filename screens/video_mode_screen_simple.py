@@ -156,8 +156,8 @@ class VideoModeScreenPygame:
         date_surface = self.date_font.render(current_date, True, (255, 255, 255))
         time_surface = self.time_font.render(current_time, True, (255, 255, 255))
 
-        self.screen.blit(date_surface, (self.screen_size[0] // 11.5, 900))
-        self.screen.blit(time_surface, (self.screen_size[0] // 11.5, 1000))
+        self.screen.blit(date_surface, (self.screen_size[0] // 13.5, 800))
+        self.screen.blit(time_surface, (self.screen_size[0] // 13.5, 900))
 
     def correct_rotation(self, frame):
         rotation = self.rotation_needed
